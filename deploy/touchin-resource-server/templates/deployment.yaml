@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "touchin-resource-server.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "touchin-resource-server.name" . }}
+    helm.sh/chart: {{ include "touchin-resource-server.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app: {{ include "touchin-resource-server.name" . }}
+    log.type: {{ .Values.log.type }}
+    log.provider: {{ .Values.log.provider }}
+    log.consumed-by: {{ .Values.log.consumedBy }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "touchin-resource-server.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "touchin-resource-server.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app: {{ include "touchin-resource-server.name" . }}
+        log.type: {{ .Values.log.type }}
+        log.provider: {{ .Values.log.provider }}
+        log.consumed-by: {{ .Values.log.consumedBy }}
+    spec:
+      imagePullSecrets:
+        - name: docker-registry-secret
+      initContainers:
+        - name: "{{ .Chart.Name }}-init-db"
+          image: postgres:9.6
+          command:
+            - "sh"
+            - "-c"
+            - >
+              psql -tc "SELECT 1 FROM pg_database WHERE datname = '{{ .Values.db.name }}'" | grep -q 1 ||
+              psql -c "CREATE DATABASE \"{{ .Values.db.name }}\""
+          env:
+           - name: PGPASSWORD
+             valueFrom:
+               secretKeyRef:
+                 name: "postgres-{{ .Release.Namespace }}"
+                 key: postgres-password
+           - name: PGHOST
+             value: "postgres12-{{ .Release.Namespace }}"
+           - name: PGUSER
+             value: "postgres"
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: JAVA_OPTS
+              value: "{{ .Values.javaOpts }}"
+            - name: APP_PROFILE
+              value: "{{ .Values.profile }}"
+            - name: spring_datasource_password
+              valueFrom:
+                secretKeyRef:
+                  name: "postgres-{{ .Release.Namespace }}"
+                  key: postgres-password
+            - name: spring_datasource_url
+              value: "jdbc:postgresql://postgres12-{{ .Release.Namespace }}:5432/{{ .Values.db.name }}{{ .Values.db.namePostfix }}"
+            - name: spring_datasource_username
+              value: "postgres"
+            - name: "management_metrics_export_elastic_enabled"
+              value: "{{ .Values.metrics.enabled }}"
+            - name: "management_metrics_export_elastic_host"
+              value: "{{ .Values.metrics.elasticSearchHost }}"
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
