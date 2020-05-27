@@ -29,7 +29,7 @@ ARG app_name
 
 ENV APP_NAME=${app_name}
 
-COPY --from=0 "build/server/build/libs/server.jar" "/app/${app_name}.jar"
+COPY --from=0 "build/build/libs/server.jar" "/app/${app_name}.jar"
 
 EXPOSE 8080
 EXPOSE 9000
