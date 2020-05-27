@@ -6,7 +6,7 @@ RUN mkdir /build
 
 COPY . /build
 
-WORKDIR /build/server
+WORKDIR /build
 
 RUN gradle build
 
